@@ -1,0 +1,261 @@
+ID,Title,Content,Acceptance Criteria,Review Requirements,State,Labels
+P0-1,修复 pyproject.toml 打包配置,"**文件位置：** `pyproject.toml`
+
+**当前问题：**
+- 缺少 `[tool.hatch.build.targets.wheel]` 配置
+- 执行 `pip install -e .` 报错：`ValueError: Unable to determine which files to ship inside the wheel`
+- 项目使用 `src/` 布局但 hatchling 无法识别
+
+**修复内容：**
+在 `pyproject.toml` 文件末尾添加：
+```toml
+[tool.hatch.build.targets.wheel]
+packages = [""src""]
+```
+
+**影响范围：** 项目打包和安装流程","1. 在干净虚拟环境执行 `python -m venv test_env && source test_env/bin/activate && pip install -e .` 成功且无错误
+2. 执行 `python -c ""from server import server; print('OK')"" ` 输出 `OK`
+3. 执行 `pip install build && python -m build` 成功生成 `dist/*.whl` 文件
+4. 执行 `pip install dist/*.whl` 可在新环境中安装
+5. wheel 文件包含 `src/` 目录下所有 Python 模块（通过 `unzip -l dist/*.whl` 验证）","1. 验证 `packages = [""src""]` 配置正确（不是 `packages = [""sumo_mcp""]`）
+2. 确认不影响现有 dev dependencies 和 tool.mypy 配置
+3. 验证 build 系统仍为 hatchling（不要改成 setuptools）",已完成,已完成
+P0-2,实现 Windows 标准安装路径自动检测,"**文件位置：** `src/utils/sumo.py:43-67`（`find_sumo_home` 函数）
+
+**当前问题：**
+- 仅硬编码 Linux 路径 `/usr/share/sumo`
+- Windows 用户即使安装 SUMO 到标准位置，不设置 SUMO_HOME 也会失败
+- 未检测 Windows Registry 或常见安装目录
+
+**修复内容：**
+1. 在 `find_sumo_home()` 中添加 Windows 平台检测（`sys.platform == 'win32'`）
+2. 检测常见 Windows 路径：
+   - `C:/Program Files/Eclipse/sumo`
+   - `C:/Program Files (x86)/Eclipse/sumo`
+   - `D:/sumo`
+   - `C:/sumo`
+3. 可选：添加 Windows Registry 读取（`HKLM\SOFTWARE\Eclipse\SUMO\InstallPath`）
+4. 添加 macOS Homebrew 支持（`/usr/local/Cellar/sumo/*/share/sumo`）
+5. 修正 Linux 路径逻辑（当前返回 `/usr/share/sumo`，应返回父目录）
+
+**影响范围：** 所有依赖 SUMO_HOME 检测的功能","1. 编写单元测试 `tests/test_utils_sumo.py::test_find_sumo_home_windows`，mock `sys.platform='win32'` 和 `Path.exists()`，验证返回 `C:/Program Files/Eclipse/sumo`
+2. 编写单元测试 `test_find_sumo_home_macos`，验证 Homebrew 路径检测
+3. 在实际 Windows 机器（SUMO 安装在 `C:\Program Files\Eclipse\sumo`，不设置 SUMO_HOME）运行 `python -c ""from utils.sumo import find_sumo_home; assert find_sumo_home() is not None""`
+4. 执行 MCP 工具 `get_sumo_info`，验证能正确返回 SUMO 版本和路径
+5. 确保 Linux 现有功能无回归（在 Linux 环境测试或 mock）","1. 确保 Windows 路径使用正斜杠 `/` 或 `Path` 对象（避免转义问题）
+2. Registry 读取必须有 try-except 包裹（避免 winreg 不可用）
+3. 验证 macOS 的 glob 模式正确（多版本共存场景）
+4. 确保函数返回值类型一致（`Optional[str]`）
+5. 添加日志输出便于调试（使用 `logging.debug`）",未开始,等待确认
+P1-1,修复 Windows 跨驱动器路径导致配置不可移植,"**文件位置：** `src/workflows/signal_opt.py`（`signal_opt_workflow` 和 `_as_cfg_path` 函数）
+
+**当前问题：**
+- 当 `net_file`/`route_file` 与 `output_dir` 在不同 Windows 驱动器时，`os.path.relpath()` 抛 `ValueError`
+- 代码 fallback 到绝对路径，生成的 `.sumocfg` 包含 `D:\...` 形式的路径
+- 配置文件无法在其他机器或目录使用
+
+**修复内容（方案 A - 推荐）：**
+1. 在 `signal_opt_workflow()` 开始处，将所有输入文件复制到 `output_dir`：
+   ```python
+   local_net_file = os.path.join(output_dir, os.path.basename(net_file))
+   local_route_file = os.path.join(output_dir, os.path.basename(route_file))
+   if os.path.abspath(net_file) != os.path.abspath(local_net_file):
+       shutil.copy2(net_file, local_net_file)
+   # Use local files afterwards
+   ```
+2. 修改 `_as_cfg_path()` 函数：
+   - 移除 `try-except ValueError` 的绝对路径 fallback
+   - 如果无法生成相对路径，使用 `basename` 并发出 `warnings.warn()`
+3. 统一处理逻辑：`net_file`、`route_file`、`fcd_file` 使用相同规则（移除 line 102 的特殊处理）
+
+**影响范围：** 信号优化工作流生成的所有 `.sumocfg` 文件","1. 编写单元测试 `tests/test_workflows_signal_opt.py::test_cross_drive_paths`（可在 Windows 运行或 mock `os.path.relpath` 抛 ValueError）
+2. 验证生成的 `.sumocfg` 文件所有路径均为相对路径（通过正则 `r'[A-Z]:\\'` 匹配，应为空）
+3. 在实际 Windows 跨驱动器场景测试：
+   - `net_file='C:/test/net.xml'`，`output_dir='D:/output'`
+   - 验证 `D:/output/` 下生成了 `net.xml` 副本
+   - 验证 `.sumocfg` 中 `<net-file value=""net.xml""/>`（相对路径）
+4. 将生成的 `output_dir` 移动到其他位置，执行 `sumo -c xxx.sumocfg`，验证能正常运行
+5. 在 Linux 环境测试，确保无回归","1. 确认使用 `shutil.copy2()` 保留文件元数据
+2. 验证不会重复复制文件（已存在且内容相同则跳过）
+3. 检查 `_as_cfg_path()` 的 warning 消息清晰
+4. 考虑大文件复制的性能影响（必要时添加进度提示）
+5. 更新 `signal_opt_workflow` 的 docstring 说明文件会被复制",未开始,等待确认
+P1-2,重构 find_sumo_binary 返回值为 Optional 类型,"**文件位置：**
+- `src/utils/sumo.py:9-29`（`find_sumo_binary` 函数定义）
+- `src/mcp_tools/simulation.py:20-25`（调用处 1）
+- `src/server.py:243`（调用处 2）
+- 其他潜在调用处（需全局搜索）
+
+**当前问题：**
+- 找不到二进制时返回原始名称（如 `""sumo""`）而非 `None`
+- 调用者必须用字符串比较 `if sumo_binary == ""sumo""` 判断失败
+- 设计脆弱：调用 `find_sumo_binary(""sumo-gui"")` 时判断逻辑失效
+
+**修复内容：**
+1. 修改 `find_sumo_binary()` 签名和实现：
+   ```python
+   def find_sumo_binary(name: str) -> Optional[str]:
+       # ... 检测逻辑 ...
+       return which  # 返回 None 而非 name
+   ```
+2. 更新所有调用处的判断逻辑：
+   ```python
+   sumo_binary = find_sumo_binary(""sumo"")
+   if not sumo_binary:  # 替代 if sumo_binary == ""sumo""
+       return ""Error: ...""
+   ```
+3. 添加类型注解 `from typing import Optional`
+4. 更新函数 docstring 说明返回值
+
+**影响范围：** 所有 SUMO 二进制检测相关功能","1. 执行 `mypy src/` 验证类型注解正确，无类型错误
+2. 全局搜索 `find_sumo_binary` 的所有调用（`grep -rn 'find_sumo_binary' src/`），确认所有调用处已更新
+3. 编写单元测试 `test_find_sumo_binary_not_found`，mock `sumolib.checkBinary` 和 `shutil.which` 均失败，验证返回 `None`
+4. 编写单元测试 `test_find_sumo_binary_found`，验证返回绝对路径
+5. 在无 SUMO 环境运行 `run_simple_simulation()`，验证错误消息正确显示","1. 确认返回类型注解为 `Optional[str]`（不是 `Union[str, None]`）
+2. 验证 `sumolib.checkBinary` 返回非路径字符串时也返回 `None`
+3. 检查所有 `if sumo_binary == ` 的字符串比较都已移除
+4. 确保向后兼容：如果有外部代码调用此函数，需在 CHANGELOG 注明 breaking change",未开始,等待确认
+P2-1,细化异常捕获范围避免隐藏错误,"**文件位置：** `src/utils/sumo.py:20-23`（`find_sumo_binary` 函数）
+
+**当前问题：**
+- 使用裸 `except Exception:` 捕获所有异常
+- `sumolib.checkBinary()` 可能抛出多种异常（`SystemExit`、`OSError`、`ImportError`）
+- 宽泛捕获会隐藏编程错误，用户无法得知真实问题
+
+**修复内容：**
+1. 将 `except Exception:` 改为具体异常类型：
+   ```python
+   try:
+       resolved = sumolib.checkBinary(name)
+       # ...
+   except (SystemExit, OSError, FileNotFoundError) as e:
+       import logging
+       logging.debug(f""sumolib.checkBinary failed for {name}: {e}"")
+       pass  # Fall through to PATH check
+   ```
+2. 添加 logging 支持（如果项目未配置 logging，添加基础配置）
+3. 考虑在调试模式下重新抛出异常
+
+**影响范围：** SUMO 二进制检测的健壮性","1. 编写单元测试 mock `sumolib.checkBinary` 抛出 `SystemExit`，验证正常 fallback
+2. 编写单元测试 mock 抛出 `OSError`，验证正常 fallback
+3. 编写单元测试 mock 抛出 `AttributeError`（编程错误），验证异常不被捕获（测试应失败）
+4. 在实际 SUMO 损坏环境测试，验证 debug 日志有输出
+5. 执行 `pytest tests/ -v` 确保所有测试通过","1. 确认 logging.debug 不会在生产环境打印到 stdout（避免污染 MCP 输出）
+2. 验证异常类型列表完整（检查 sumolib 源码或实际测试）
+3. 考虑是否需要 `except ImportError`（sumolib 未安装场景）
+4. 确保不改变函数行为（仅改进错误处理）",未开始,等待确认
+P2-2,改进错误消息增加诊断信息,"**文件位置：**
+- `src/mcp_tools/simulation.py:21-25`
+- `src/mcp_tools/route.py:14-19`
+- `src/mcp_tools/network.py:64-69`
+- `src/mcp_tools/signal.py:12-17`
+- 其他返回错误消息的位置
+
+**当前问题：**
+- 错误消息过于简单：`""Error finding sumo binary. Please ensure SUMO is installed...""`
+- 用户不知道是 PATH 检测失败还是 SUMO_HOME 检测失败
+- 无法自行诊断问题
+
+**修复内容：**
+1. 在 `simulation.py` 的错误消息中添加诊断信息：
+   ```python
+   if not sumo_binary:
+       import os, shutil
+       return (
+           f""Error: Could not locate SUMO executable.\\n""
+           f""Diagnostics:\\n""
+           f""  - SUMO_HOME: {os.environ.get('SUMO_HOME', 'Not Set')}\\n""
+           f""  - PATH search: {shutil.which('sumo') or 'Not Found'}\\n""
+           f""  - sumolib check: Failed\\n""
+           f""\\nPlease:\\n""
+           f""  1. Install SUMO from https://sumo.dlr.de/\\n""
+           f""  2. Set SUMO_HOME environment variable, OR\\n""
+           f""  3. Add SUMO bin directory to PATH\\n""
+       )
+   ```
+2. 对 tools 脚本（randomTrips、osmGet 等）的错误消息添加 `find_sumo_home()` 的实际返回值
+3. 统一错误消息格式（建议使用三层结构：Error / Diagnostics / Solution）
+
+**影响范围：** 所有用户面向的错误消息","1. 手动测试：在无 SUMO 环境执行 `run_simple_simulation()`，验证错误消息包含 `SUMO_HOME: Not Set` 和 `PATH search: Not Found`
+2. 手动测试：设置错误的 SUMO_HOME，验证错误消息显示错误路径
+3. 对每个修改的文件，编写单元测试验证错误消息格式正确
+4. 确保错误消息在 MCP JSON-RPC 响应中正确显示（不被截断）
+5. 代码审查：检查所有错误消息是否友好且可操作","1. 验证错误消息不包含敏感信息（如完整文件路径可能泄露用户名）
+2. 确保 shutil.which() 调用不会阻塞（在某些网络文件系统可能慢）
+3. 考虑国际化（i18n）需求（当前版本可暂时使用英文）
+4. 验证多行错误消息在 CLI 和 IDE 集成中显示正常
+5. 检查错误消息长度（避免过长影响阅读）",未开始,等待确认
+P2-3,完善 README 和启动脚本的平台特定说明,"**文件位置：**
+- `README.md`（安装和配置章节）
+- `start_server.bat`（Windows 启动脚本）
+- `start_server.sh`（Linux/macOS 启动脚本）
+- `start_server.ps1`（PowerShell 启动脚本）
+- `mcp_config_examples.json`（配置示例）
+
+**当前问题：**
+- 假设用户已知如何设置 SUMO_HOME
+- 未提供 Windows/macOS/Linux 的不同安装指导
+- 未说明""使用 tools 脚本时必须设置 SUMO_HOME，仅使用 binary 时可选""
+
+**修复内容：**
+1. 在 `README.md` 添加 ""Installation & Setup"" 章节，包含：
+   - Windows 安装步骤（官方安装包 + 设置环境变量）
+   - Linux 安装步骤（apt/yum 包管理器）
+   - macOS 安装步骤（Homebrew）
+   - 验证安装的命令
+2. 添加 ""Important Notes"" 说明 SUMO_HOME 的使用场景
+3. 更新 `mcp_config_examples.json`，添加注释说明环境变量设置
+4. 在启动脚本中添加环境检查：
+   ```bash
+   if ! command -v sumo &> /dev/null && [ -z ""$SUMO_HOME"" ]; then
+       echo ""Error: SUMO not found. Please install SUMO or set SUMO_HOME.""
+       exit 1
+   fi
+   ```
+
+**影响范围：** 新用户的首次安装体验","1. 按照 README 中 Windows 章节的步骤，在全新 Windows 机器上安装 SUMO 和 sumo-mcp，验证能成功运行
+2. 按照 README 中 Linux 章节的步骤，在 Ubuntu 虚拟机验证
+3. 按照 README 中 macOS 章节的步骤验证（或请 macOS 用户测试）
+4. 执行修改后的启动脚本，在无 SUMO 环境验证错误消息正确显示
+5. 检查所有文档链接有效（如 https://sumo.dlr.de/）","1. 确保文档中的命令可复制粘贴直接运行（避免特殊字符）
+2. 验证 Windows 路径使用反斜杠或提示用户转换
+3. 检查 Homebrew 安装命令是否为最新（`brew install sumo` 或 `brew install eclipse-sumo`）
+4. 确保启动脚本的环境检查不影响 Docker 等容器化部署
+5. 文档中添加 ""Troubleshooting"" 章节（常见问题）",未开始,等待确认
+P3-1,修复 Windows 平台测试兼容性问题,"**文件位置：** `tests/test_server_jsonrpc_smoke_without_sumo_home.py`（`_read_json_line` 函数）
+
+**当前问题：**
+- 测试使用 `selectors.select()` 处理进程 I/O
+- Windows 的 `select()` 不支持文件描述符（仅支持 socket）
+- 导致测试在 Windows 上失败：`OSError: [WinError 10038]`
+
+**修复内容：**
+1. 修改 `_read_json_line()` 函数，添加平台检测：
+   ```python
+   import sys
+   if sys.platform == 'win32':
+       # Use threading for Windows
+       import threading, queue
+       result_queue = queue.Queue()
+       def reader():
+           result_queue.put(process.stdout.readline())
+       thread = threading.Thread(target=reader, daemon=True)
+       thread.start()
+       line = result_queue.get(timeout=timeout_s)
+   else:
+       # Use select for Unix
+       import select
+       # ... existing code ...
+   ```
+2. 或者使用 `subprocess.communicate()` 配合 `timeout` 参数（更简单但功能受限）
+3. 添加 `@pytest.mark.skipif(sys.platform == 'win32', reason='...')` 标记（临时方案）
+
+**影响范围：** Windows 平台的 CI/CD 测试","1. 在 Windows 环境执行 `pytest tests/test_server_jsonrpc_smoke_without_sumo_home.py -v`，验证测试通过
+2. 在 Linux 环境执行相同测试，确保无回归
+3. 验证测试超时机制正常工作（mock 慢响应）
+4. 执行完整测试套件 `pytest tests/ -v`，确保所有测试通过
+5. 在 CI 配置中添加 Windows 测试（如 GitHub Actions 的 `runs-on: windows-latest`）","1. 确认 threading 方案不会导致测试僵死（daemon=True 正确设置）
+2. 验证 queue.get(timeout) 的异常处理正确
+3. 考虑使用第三方库如 `pytest-timeout` 简化实现
+4. 检查是否有其他测试文件存在类似问题（全局搜索 `selectors`）
+5. 更新测试文档说明跨平台兼容性",未开始,等待确认
