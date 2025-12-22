@@ -31,17 +31,20 @@ def test_workflow():
     process.stdin.flush()
     
     # Call Workflow
-    print("Calling run_sim_gen_workflow...")
+    print("Calling run_workflow...")
     req = {
         "jsonrpc": "2.0",
         "id": 2,
         "method": "tools/call",
         "params": {
-            "name": "run_sim_gen_workflow",
+            "name": "run_workflow",
             "arguments": {
-                "output_dir": output_dir,
-                "grid_number": 3,
-                "steps": 50
+                "workflow_name": "sim_gen_eval",
+                "params": {
+                    "output_dir": output_dir,
+                    "grid_number": 3,
+                    "steps": 50
+                }
             }
         }
     }

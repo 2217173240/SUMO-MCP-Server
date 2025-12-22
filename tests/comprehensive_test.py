@@ -2,6 +2,7 @@ import subprocess
 import json
 import time
 import threading
+import traceback
 import os
 import sys
 import shutil
@@ -151,7 +152,7 @@ class MCPTestRunner:
         resp = self.read_response()
         if resp and "result" in resp and "tools" in resp["result"]:
             tool_names = [t["name"] for t in resp["result"]["tools"]]
-            passed = "run_sim_gen_workflow" in tool_names
+            passed = "run_workflow" in tool_names
             self.record_result("functional", "List Tools", passed, f"Found {len(tool_names)} tools")
         else:
             self.record_result("functional", "List Tools", False, "Failed to list tools")
@@ -163,10 +164,13 @@ class MCPTestRunner:
 
         # 3. Sim Gen Workflow (E2E)
         workflow_out = os.path.join(self.output_dir, "sim_gen_test")
-        res = self.run_tool("run_sim_gen_workflow", {
-            "output_dir": workflow_out,
-            "grid_number": 3,
-            "steps": 50
+        res = self.run_tool("run_workflow", {
+            "workflow_name": "sim_gen_eval",
+            "params": {
+                "output_dir": workflow_out,
+                "grid_number": 3,
+                "steps": 50
+            }
         })
         passed = res["success"] and "Workflow Completed Successfully" in (res["content"] or "")
         self.record_result("functional", "Sim Gen Workflow", passed, 
@@ -197,10 +201,13 @@ class MCPTestRunner:
 
         # 2. Stress Test (Medium Simulation)
         stress_out = os.path.join(self.output_dir, "stress_test")
-        res = self.run_tool("run_sim_gen_workflow", {
-            "output_dir": stress_out,
-            "grid_number": 5, # Larger grid
-            "steps": 200      # More steps
+        res = self.run_tool("run_workflow", {
+            "workflow_name": "sim_gen_eval",
+            "params": {
+                "output_dir": stress_out,
+                "grid_number": 5, # Larger grid
+                "steps": 200      # More steps
+            }
         })
         self.record_result("performance", "Stress Test (5x5 Grid)", res["success"],
                            f"Duration: {res['duration']:.2f}s", {"duration": res["duration"]})
@@ -228,10 +235,13 @@ class MCPTestRunner:
         # Note: Depending on implementation, SUMO might handle this or python script might fail.
         # Our tools typically pass args to command line.
         invalid_out = os.path.join(self.output_dir, "invalid_test")
-        res = self.run_tool("run_sim_gen_workflow", {
-            "output_dir": invalid_out,
-            "grid_number": -1, 
-            "steps": 10
+        res = self.run_tool("run_workflow", {
+            "workflow_name": "sim_gen_eval",
+            "params": {
+                "output_dir": invalid_out,
+                "grid_number": -1, 
+                "steps": 10
+            }
         })
         # netgenerate might fail with negative grid number
         passed = "Failed" in (res["content"] or "") or (res["error"] is not None)

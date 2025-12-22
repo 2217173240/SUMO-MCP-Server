@@ -162,3 +162,7 @@ tests/output_stability/
 # Local configuration overrides (optional)
 config_local.py
 secrets.py
+
+# Kiro specific
+kiro_test/
+.kiro/
