@@ -151,6 +151,17 @@ Thumbs.db
 
 # --- SUMO-MCP Specific ---
 
+# Local workflow outputs / scratch artifacts
+output/
+output_*/
+test_out/
+routes.rou.xml
+*.rar
+
+# Local experiments (not part of OSS release)
+examples/
+test/
+
 # Local configuration overrides (optional)
 config_local.py
 secrets.py
