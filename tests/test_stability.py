@@ -1,7 +1,11 @@
 import pytest
 import os
+import sys
 import shutil
-from src.mcp_tools.simulation import run_simple_simulation
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
+from mcp_tools.simulation import run_simple_simulation
 
 # This module runs real SUMO simulations. Skip in environments without SUMO.
 HAS_SUMO = bool(os.environ.get("SUMO_HOME")) or shutil.which("sumo") is not None

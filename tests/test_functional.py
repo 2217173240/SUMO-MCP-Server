@@ -1,10 +1,14 @@
 import os
+import sys
 import shutil
 import pytest
-from src.mcp_tools.network import netgenerate
-from src.mcp_tools.route import random_trips, duarouter
-from src.mcp_tools.simulation import run_simple_simulation
-from src.mcp_tools.analysis import analyze_fcd
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
+from mcp_tools.network import netgenerate
+from mcp_tools.route import random_trips, duarouter
+from mcp_tools.simulation import run_simple_simulation
+from mcp_tools.analysis import analyze_fcd
 
 # This module exercises real SUMO binaries/tools. Skip in environments without SUMO.
 HAS_SUMO = bool(os.environ.get("SUMO_HOME")) or shutil.which("sumo") is not None

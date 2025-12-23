@@ -1,7 +1,11 @@
 import pytest
 import os
-from src.mcp_tools.network import netconvert
-from src.mcp_tools.simulation import run_simple_simulation
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
+from mcp_tools.network import netconvert
+from mcp_tools.simulation import run_simple_simulation
 
 def test_cmd_injection_netconvert():
     # Attempt to inject a command via filename
