@@ -157,9 +157,13 @@ output_*/
 test_out/
 routes.rou.xml
 *.rar
+*.7z
+*.zip
 test_rl_output/
 test_rl_training.py
 TEST_REPORT_FIXES.md
+INSTALLATION_VERIFICATION.md
+docs/test_*.md
 
 # Example outputs (keep source examples but ignore generated outputs)
 examples/signal_opt_*/
@@ -188,3 +192,10 @@ tests/
 
 # Local SUMO distribution copy (too large for git)
 sumo/
+
+# Local sumo-rl source drop (for offline analysis; do not commit)
+sumo-rl-*/
+sumo-rl-*.zip
+
+# Private test assets (not part of OSS release)
+路网/

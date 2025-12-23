@@ -1,4 +1,84 @@
 ID,Title,Content,Acceptance Criteria,Review Requirements,State,Labels
+P0-3,完善 .gitignore 忽略本地第三方源码/测试资产,"**背景：** 当前仓库用于开源发布，但本地为了调试会下载/复制大体量依赖与测试资产（如 `sumo-rl` 源码包、路网样例、压缩包等）。这些文件一旦被 git 追踪会导致仓库膨胀、提交困难，并阻塞 push。
+
+**当前问题：**
+- `sumo-rl-1.4.5/` 与 `sumo-rl-1.4.5.zip` 属于本地下载的第三方源码/压缩包，不应进入版本控制。
+- `路网/` 为测试用路网资产（非 `examples/` 的开源示例），不应进入版本控制。
+- `sumo-mcp.7z` 等压缩包为本地归档产物，不应进入版本控制。
+
+**修复内容：**
+1. 在 `.gitignore` 中新增规则，忽略：
+   - `sumo-rl-*/`、`sumo-rl-*.zip`
+   - `路网/`
+   - `*.7z`（以及必要的其他本地归档扩展）
+2. 确保规则不误伤 `src/`、`doc/`、`docs/`、`examples/` 等开源内容。
+
+**影响范围：** 发布、协作、push 流程（仓库体积/干净度）","1. 执行 `git status --porcelain` 不再出现 `?? sumo-rl-*/`、`?? sumo-rl-*.zip`、`?? 路网/`、`?? *.7z` 等未跟踪项（这些文件仍保留在磁盘上，但被忽略）
+2. 执行 `git check-ignore -v sumo-rl-1.4.5 sumo-rl-1.4.5.zip 路网 sumo-mcp.7z` 均能命中对应 ignore 规则
+3. 规则生效后不影响代码检索（例如 `rg -n \"run_rl_training\" src/` 正常）","1. 忽略规则尽量精确（优先目录/特定前缀，不要用过宽的 `*`）
+2. 不要把 `examples/` 下的开源示例产物误忽略（已有反向规则需保留）
+3. 不修改现有已生效的 Python/IDE 通用 ignore 规则",已完成,已完成
+P1-3,RL: 统一参数入口并兼容 scenario/路径两种调用,"**背景：** 目前用户侧存在多种调用方式与参数命名（`episodes` vs `num_episodes`、`out_dir` vs `output_dir`、以及把 `scenario` 误传给 `train_custom`）。导致 RL 训练经常在参数解析阶段失败或行为不确定。
+
+**已知现象（用户实测）：**
+- `Training failed: not enough values to unpack (expected 2, got 1)`
+- `Training failed: Connection closed by SUMO`
+- 历史错误：`Unexpected keyword argument 'num_episodes'` / `Unexpected keyword argument 'algorithm'` / `too many values to unpack (expected 2)`
+
+**根因定位（基于 sumo-rl 1.4.5 源码）：**
+- `sumo_rl.environment.env.SumoEnvironment`：
+  - `reset()`：`single_agent=False` 返回 `dict[ts_id, obs]`；`single_agent=True` 返回 `(obs, info)`。
+  - `step()`：`single_agent=False` 返回 `(obs_dict, rewards_dict, dones_dict, info_dict)`；`single_agent=True` 返回 5 元组 `(obs, reward, terminated, truncated, info)`（Gymnasium 风格）。
+- 因此 MCP 层需要明确约束/兼容返回形态，并统一外部参数契约。
+
+**修复内容：**
+1. 统一 MCP 入参（`src/server.py::manage_rl_task`）：
+   - 支持同义字段：`episodes|num_episodes`、`steps|steps_per_episode`、`out_dir|output_dir`。
+   - 支持 `scenario|scenario_name`：当提供 `scenario(_name)` 时，忽略 `net_file/route_file`，从 `sumo_rl/nets/<scenario>` 自动定位 `.net.xml` 与 `.rou.xml`。
+2. 对常用场景名做别名映射（例如 `single-intersection` → `2way-single-intersection`），并在错误时返回可用场景列表（`list_rl_scenarios()`）。
+3. 调用 `run_rl_training()` 改为关键字参数，避免 positional 传参错位导致的兼容性问题。
+4. `doc/API.md` 同步更新：明确 `train_custom` 支持 `scenario(_name)` 与参数同义字段（唯一真相源仍为 `src/server.py`）。
+
+**影响范围：** `manage_rl_task` 与 `run_workflow(rl_train)` 的用户体验与兼容性","1. （单元测试/Mock）对 `src/server.py::manage_rl_task(train_custom)`：
+   - 传入 `{ \"episodes\": 3, \"steps\": 100 }` 与 `{ \"num_episodes\": 3, \"steps_per_episode\": 100 }` 解析结果一致（可通过 patch `mcp_tools.rl.run_rl_training` 断言入参）
+   - 传入 `{ \"scenario\": \"single-intersection\" }` 会被映射到 `2way-single-intersection` 并定位到真实存在的 `.net.xml/.rou.xml` 路径（只验证路径解析，不要求启动 SUMO）
+2. （手动验证）在 Windows+SUMO 环境执行 MCP 调用：`manage_rl_task(train_custom, {scenario: '3x3grid', episodes: 1, steps: 100})` 能进入训练流程（不再出现参数级错误）","1. 参数兼容必须“显式、可预测”：同义字段冲突时要有确定优先级并在返回值中提示
+2. 别名映射应集中管理（避免散落多个 if）
+3. 文档更新必须与 `src/server.py` 对齐（避免再次出现“理念一致但实现不同”）",未开始,等待确认
+P1-4,RL: SUMO 连接中断/解包异常的诊断与稳健性,"**背景：** 用户实测出现 `Connection closed by SUMO` 与 `not enough values to unpack`。在 TraCI 场景下，这类报错常见于 SUMO 启动参数错误、net/route 不匹配、或 SUMO 进程提前退出导致的协议读写异常。
+
+**修复内容：**
+1. `src/mcp_tools/rl.py::run_rl_training` 增强对返回形态的兼容：
+   - `reset()` 若返回 `(obs, info)`，应自动取 `obs` 并继续（避免误判/异常）。
+   - `step()` 兼容 4 元组与 5 元组返回（Gymnasium terminated/truncated 风格），并统一为可终止条件（防止死循环导致 SUMO 先退出再触发 TraCI 错误）。
+2. 增加“最大步数”安全阈值：即使 `dones` 缺少 `__all__` 也能在预期步数内退出，避免无限循环。
+3. 自动落地 SUMO 错误日志：为 `SumoEnvironment(additional_sumo_cmd=...)` 注入 `--error-log <out_dir>/sumo_error.log`（必要时追加 `--log`），当训练失败时返回日志末尾 N 行作为诊断信息。
+4. 返回的错误消息补齐诊断上下文：`SUMO_HOME`、sumo binary 定位结果、使用的 net/route 路径、error-log 路径。
+
+**影响范围：** 自定义训练与内置场景训练的可诊断性与稳定性","1. （单元测试/Mock）构造一个假的 env：
+   - `reset()` 返回 `(obs, info)`；`step()` 返回 5 元组；验证 `run_rl_training()` 不抛异常并能正常收敛退出
+2. （单元测试/Mock）模拟 `step()` 返回的 `dones` 不包含 `__all__`，验证“最大步数阈值”能终止循环
+3. （手动验证）在 Windows+SUMO 环境复现原错误场景时，返回值中必须包含 `sumo_error.log` 的路径与末尾日志片段，便于定位 SUMO 退出原因","1. 不要静默吞错：若捕获异常，应尽量保留错误类型信息与关键上下文
+2. 日志截取应限制长度（例如最后 80 行），避免 MCP 响应过大
+3. 不要把用户主目录等敏感信息原样打印（路径可保留，但注意不要输出环境中无关机密）",未开始,等待确认
+P3-2,路网生成: Spider 参数映射无效（生成结果仍为 Grid）,"**现象（用户实测）：**
+- 调用 `manage_network(action=generate, params={spider: true, arms: 8})` 生成了文件，但网络类型仍为 Grid（文件头部 `<grid_network>`）。
+
+**根因：**
+- `src/server.py::manage_network(generate)` 只透传 `grid/grid_number`，未处理 `spider` 相关参数。
+- `src/mcp_tools/network.py::netgenerate()` 仅实现 `--grid` 参数拼装，缺少 `--spider` 与其专属参数映射。
+
+**修复内容：**
+1. 为 `manage_network(generate)` 增加网络类型选择（建议新增 `type` 或以 `spider=true` 触发）：
+   - 当 `spider=true` 时忽略 `grid/grid_number`，并传递 spider 参数（如 `arms` / `ring_radius` / `radial_distance` 等）。
+2. `netgenerate()` 扩展参数拼装：正确生成 spider 网络的命令行参数。
+3. `doc/API.md` 更新 `manage_network/generate` 的参数说明：明确 Grid/Spider 的互斥与默认值。
+
+**影响范围：** `manage_network(generate)` 功能完整性（路网类型覆盖）","1. （单元测试/Mock）patch `subprocess.run`，当 `spider=true` 时断言命令行包含 `--spider` 且不包含 `--grid`
+2. （手动验证）实际运行生成：输出 net 文件头部包含 spider 网络标识（不再是 `<grid_network>`）
+3. （回归）`grid=true` 逻辑保持不变","1. 参数互斥逻辑必须清晰（避免 grid/spider 同时生效）
+2. spider 参数需有合理默认值与类型校验（如 arms 为正整数）
+3. 命令行参数名需与 SUMO `netgenerate --help` 对齐（避免拼错导致 silent fallback）",未开始,等待确认
 P0-1,修复 pyproject.toml 打包配置,"**文件位置：** `pyproject.toml`
 
 **当前问题：**
