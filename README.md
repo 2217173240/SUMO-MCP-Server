@@ -79,6 +79,21 @@ pip install git+https://github.com/2217173240/sumo-mcp.git
 
 您可以选择以下任一方式配置开发环境。
 
+### Windows 一键安装（PowerShell）
+
+在 Windows 上可以直接使用仓库自带脚本创建 `.venv` 并安装依赖（默认包含开发依赖 `.[dev]`）：
+
+```powershell
+.\install_deps.ps1
+# 可选：指定镜像
+.\install_deps.ps1 -IndexUrl https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+如果只安装运行依赖（不装 `pytest/mypy` 等），使用：
+```powershell
+.\install_deps.ps1 -NoDev
+```
+
 ### 选项 A：使用 uv (推荐 - 极速)
 
 [uv](https://github.com/astral-sh/uv) 是目前最快的 Python 包管理工具，支持一键同步依赖。
