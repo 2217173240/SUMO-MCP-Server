@@ -50,6 +50,25 @@ API 参考见 `doc/API.md`（唯一真相源以 `src/server.py` 的工具注册�
 *   **Python**: 3.10+ (强制要求，以支持最新的类型系统与 MCP SDK)
 *   **SUMO**: Eclipse SUMO 1.23+（需保证 SUMO 二进制在 `PATH` 中；如需使用 SUMO 自带 tools 脚本，建议配置 `SUMO_HOME`）
 
+### Python 依赖
+
+**运行时依赖**（安装后即可使用所有 MCP 工具）：
+- `mcp[cli]>=1.0.0` - 官方 Model Context Protocol SDK
+- `sumolib>=1.20.0` - SUMO Python 库（路网操作、二进制调用）
+- `traci>=1.20.0` - Traffic Control Interface（在线实时控制）
+- `sumo-rl>=1.4.3` - SUMO 强化学习环境（RL 训练功能）
+- `pandas>=2.0.0` - 数据分析（FCD 轨迹处理）
+- `requests>=2.31.0` - HTTP 请求（OSM 数据下载）
+
+**开发依赖**（可选，用于测试和代码质量检查）：
+- `mypy>=1.8.0` - 静态类型检查
+- `flake8>=7.0.0` - 代码风格检查
+- `pytest>=8.0.0` - 单元测试框架
+- `psutil>=5.9.0` - 系统资源监控（性能测试）
+- `types-*` - 类型存根包（mypy 支持）
+
+使用 `.\install_deps.ps1 -NoDev` 可以跳过开发依赖的安装。
+
 ---
 
 ## 📦 安装指南
@@ -79,20 +98,33 @@ pip install git+https://github.com/2217173240/sumo-mcp.git
 
 您可以选择以下任一方式配置开发环境。
 
-### Windows 一键安装（PowerShell）
+### Windows 一键安装
 
-在 Windows 上可以直接使用仓库自带脚本创建 `.venv` 并安装依赖（默认包含开发依赖 `.[dev]`）：
+在 Windows 上可以直接使用仓库自带脚本创建 `.venv` 并安装依赖（默认包含开发依赖 `.[dev]`）。
 
+**方式 A：PowerShell（推荐）**
 ```powershell
 .\install_deps.ps1
-# 可选：指定镜像
-.\install_deps.ps1 -IndexUrl https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 可选参数：
+.\install_deps.ps1 -NoDev                                               # 仅安装运行依赖
+.\install_deps.ps1 -IndexUrl https://pypi.tuna.tsinghua.edu.cn/simple  # 使用国内镜像
 ```
 
-如果只安装运行依赖（不装 `pytest/mypy` 等），使用：
-```powershell
-.\install_deps.ps1 -NoDev
+**方式 B：CMD（命令提示符）**
+```bat
+install_deps.bat
+
+REM 可选参数：
+install_deps.bat -NoDev
+install_deps.bat -IndexUrl https://pypi.tuna.tsinghua.edu.cn/simple
 ```
+
+脚本会自动：
+- 检测并验证 Python 3.10+ 版本
+- 创建虚拟环境 `.venv`（如不存在）
+- 升级 pip/setuptools/wheel
+- 安装项目依赖（editable mode）
 
 ### 选项 A：使用 uv (推荐 - 极速)
 

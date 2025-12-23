@@ -4,6 +4,16 @@
 
 **唯一真相源**：`src/server.py`（如本文与实现不一致，以代码为准）。
 
+## 环境要求
+
+- **Python**: 3.10+
+- **SUMO**: 1.23+（二进制在 PATH 中；使用 tools 脚本需设置 SUMO_HOME）
+- **Python 依赖**:
+  - 运行时：`mcp[cli]`, `sumolib`, `traci`, `sumo-rl`, `pandas`, `requests`
+  - 开发（可选）：`mypy`, `flake8`, `pytest`, `psutil`, `types-*`
+
+详细安装指南见 [README.md](../README.md)。
+
 ## 通用约定
 
 ### 返回值
