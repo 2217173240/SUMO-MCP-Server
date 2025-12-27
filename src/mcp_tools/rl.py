@@ -1,9 +1,10 @@
 import os
-import subprocess
 from contextlib import contextmanager
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Tuple
+
+from utils.traci import ensure_traci_start_stdout_suppressed
 
 # NOTE:
 # `sumo_rl` will raise an ImportError at import-time if `SUMO_HOME` is not set.
@@ -179,6 +180,9 @@ def run_rl_training(
             return f"Error: Network file not found at {net_file}"
         if not os.path.exists(route_file):
             return f"Error: Route file not found at {route_file}"
+
+        # Ensure any TraCI-launched SUMO process can't leak stdout into MCP stdio.
+        ensure_traci_start_stdout_suppressed()
 
         out_dir_abs = os.path.abspath(out_dir)
         os.makedirs(out_dir_abs, exist_ok=True)
@@ -364,23 +368,11 @@ def run_rl_training(
 
         from utils.timeout import run_with_adaptive_timeout
 
-        import traci as traci_module
-
-        orig_traci_start = traci_module.start
-
-        def _safe_traci_start(cmd, *args, **kwargs):
-            kwargs.setdefault("stdout", subprocess.DEVNULL)
-            return orig_traci_start(cmd, *args, **kwargs)
-
-        try:
-            traci_module.start = _safe_traci_start
-            return run_with_adaptive_timeout(
-                _train,
-                operation="rl_training",
-                params={"episodes": episodes, "steps_per_episode": steps_per_episode},
-            )
-        finally:
-            traci_module.start = orig_traci_start
+        return run_with_adaptive_timeout(
+            _train,
+            operation="rl_training",
+            params={"episodes": episodes, "steps_per_episode": steps_per_episode},
+        )
             
     except Exception as e:
         diagnostics: list[str] = [

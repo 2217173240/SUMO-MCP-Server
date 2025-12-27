@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from utils.traci import ensure_traci_start_stdout_suppressed
 from mcp_tools.simulation import run_simple_simulation
 from mcp_tools.network import netconvert, netgenerate, osm_get
 from mcp_tools.route import random_trips, duarouter, od2trips
@@ -24,6 +25,9 @@ from workflows.rl_train import rl_train_workflow
 # Configure logging to stderr to not interfere with MCP stdio transport
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Ensure TraCI never writes to stdout by default (MCP stdio safety).
+ensure_traci_start_stdout_suppressed()
 
 # Initialize MCP Server (official SDK)
 server = FastMCP("SUMO-MCP-Server")

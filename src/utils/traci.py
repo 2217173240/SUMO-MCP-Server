@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+import inspect
+import subprocess
+from typing import Any, Callable, Optional
+
+
+def ensure_traci_start_stdout_suppressed() -> None:
+    """
+    Ensure `traci.start()` defaults to `stdout=subprocess.DEVNULL`.
+
+    Why:
+      MCP uses JSON-RPC over stdio; any SUMO/TraCI stdout output can corrupt the
+      protocol stream and cause clients to hang or show `undefined`.
+
+    This wrapper is:
+      - idempotent (won't double-wrap)
+      - non-invasive (doesn't override an explicit `stdout=...`)
+      - best-effort (no-op if `traci` isn't available or doesn't support `stdout`)
+    """
+    try:
+        import traci  # type: ignore
+    except Exception:
+        return
+
+    start: Optional[Callable[..., Any]] = getattr(traci, "start", None)
+    if start is None:
+        return
+
+    if getattr(start, "_mcp_stdout_suppressed", False):
+        return
+
+    try:
+        sig = inspect.signature(start)
+    except (TypeError, ValueError):
+        # Can't introspect; be conservative.
+        return
+
+    supports_stdout = "stdout" in sig.parameters or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    if not supports_stdout:
+        return
+
+    original_start = start
+
+    def _start(cmd, *args: Any, **kwargs: Any):
+        kwargs.setdefault("stdout", subprocess.DEVNULL)
+        return original_start(cmd, *args, **kwargs)
+
+    setattr(_start, "_mcp_stdout_suppressed", True)
+    setattr(_start, "_mcp_original_start", original_start)
+
+    traci.start = _start  # type: ignore[attr-defined]
