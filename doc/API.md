@@ -4,6 +4,8 @@
 
 **唯一真相源**：`src/server.py`（如本文与实现不一致，以代码为准）。
 
+![SUMO-MCP 工具一览](sumo-mcp工具列表.png)
+
 ## 环境要求
 
 - **Python**: 3.10+
@@ -75,7 +77,7 @@
 
 ## 3. 仿真控制 (control_simulation)
 
-在线控制 SUMO 仿真实例的生命周期（需安装 GUI 或 CLI）。
+在线控制 SUMO 仿真实例的生命周期。
 
 *   **工具名**: `control_simulation`
 *   **参数**:
@@ -138,7 +140,7 @@
 
 ## 7. 强化学习任务 (manage_rl_task)
 
-管理基于 `sumo-rl` 的强化学习任务。
+管理基于开源项目 [sumo-rl](https://github.com/LucasAlegre/sumo-rl) 的强化学习任务。
 
 *   **工具名**: `manage_rl_task`
 *   **参数**:

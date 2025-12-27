@@ -1,5 +1,6 @@
 import traci
 import logging
+import subprocess
 from typing import Optional
 
 from utils.sumo import find_sumo_binary
@@ -47,7 +48,7 @@ class SUMOConnection:
                 # Add --no-step-log to prevent stdout pollution which breaks JSON-RPC
                 cmd = [binary, "-c", config_file, "--no-step-log", "true"]
                 logger.info(f"Starting SUMO with command: {cmd}")
-                traci.start(cmd, port=port) # Note: traci.start usually handles port selection or defaults
+                traci.start(cmd, port=port, stdout=subprocess.DEVNULL) # Note: traci.start usually handles port selection or defaults
             else:
                 logger.info(f"Connecting to existing SUMO at {host}:{port}")
                 traci.init(host=host, port=port)

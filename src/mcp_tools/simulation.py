@@ -1,4 +1,5 @@
 import os
+import subprocess
 import traci
 
 from utils.sumo import build_sumo_diagnostics, find_sumo_binary
@@ -33,7 +34,10 @@ def run_simple_simulation(config_path: str, steps: int = 100) -> str:
     cmd = [sumo_binary, "-c", config_path, "--no-step-log", "true", "--random"]
     
     try:
-        traci.start(cmd)
+        # IMPORTANT: MCP uses stdout for JSON-RPC over stdio.
+        # SUMO can write progress/log output to stdout which would corrupt the protocol stream,
+        # causing clients to hang or show "undefined" responses.
+        traci.start(cmd, stdout=subprocess.DEVNULL)
         
         vehicle_counts = []
         for step in range(steps):
