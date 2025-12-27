@@ -308,7 +308,13 @@ def get_sumo_info() -> str:
                 "Please ensure SUMO is installed and either `sumo` is available in PATH or `SUMO_HOME` is set."
             )
 
-        result = subprocess.run([sumo_binary, "--version"], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            [sumo_binary, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
         version_output = (result.stdout.splitlines() or ["Unknown"])[0]
 
         sumo_home = find_sumo_home()
