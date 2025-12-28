@@ -40,6 +40,8 @@ TIMEOUT_CONFIGS = {
     "randomTrips": TimeoutConfig(base_timeout=60, max_timeout=600),
     "duarouter": TimeoutConfig(base_timeout=120, max_timeout=1800),
     "simulation": TimeoutConfig(base_timeout=60, max_timeout=1800),
+    "tlsCycleAdaptation": TimeoutConfig(base_timeout=120, max_timeout=600),
+    "tlsCoordinator": TimeoutConfig(base_timeout=120, max_timeout=600),
 
     # Layer 3: 心跳+指数退避
     "rl_training": TimeoutConfig(

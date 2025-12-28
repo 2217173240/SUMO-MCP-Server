@@ -501,7 +501,7 @@ P1-8,超时机制: 补齐 tlsCycleAdaptation/tlsCoordinator 的 TIMEOUT_CONFIGS 
 
 **影响范围：** 统一超时策略与可审计性","1. 单测覆盖上述两个 operation 的 timeout 计算
 2. `pytest -q` 通过","1. 不改变现有工具返回类型/格式
-2. 不引入额外依赖",未开始,等待确认
+2. 不引入额外依赖",已完成,已完成
 P2-4,MCP: 限制工具返回的 stdout/stderr 大小（避免超大响应）,"**背景：** 多个工具直接拼接返回 `stdout/stderr`。当底层输出很大时，会导致 MCP 响应体巨大、宿主 UI 卡顿或传输失败。
 
 **修复内容：**
