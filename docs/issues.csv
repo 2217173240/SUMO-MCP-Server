@@ -516,6 +516,15 @@ P1-8,超时机制: 补齐 tlsCycleAdaptation/tlsCoordinator 的 TIMEOUT_CONFIGS 
 **影响范围：** 统一超时策略与可审计性","1. 单测覆盖上述两个 operation 的 timeout 计算
 2. `pytest -q` 通过","1. 不改变现有工具返回类型/格式
 2. 不引入额外依赖",已完成,已完成
+P1-9,Tests: signal_opt 集成测试改用 tmp_path 避免覆盖仓库 fixtures,"**背景：** 当前 `tests/test_signal_opt.py` 会把 `hello.net.xml/hello.trips.xml/hello.rou.xml` 写入 `tests/fixtures/simple_sim/`（受版本控制）。每次跑集成测试都会更新这些文件头部的生成时间戳，导致 `git status` 变脏，并可能影响其他依赖 fixtures 的测试或本地调试。
+
+**修复内容：**
+1. 将 `tests/test_signal_opt.py` 改为使用 `tmp_path` 生成临时 net/trips/route/cfg/fcd 与输出目录，避免修改受版本控制的 fixtures。
+2. 保持测试语义不变：仍然通过 MCP server 调用 `run_workflow(signal_opt)` 验证端到端流程。
+
+**影响范围：** 测试可重复性与仓库清洁度","1. 运行 `pytest -k signal_opt -q` 后 `git status` 不出现 fixtures 变更
+2. `pytest -q` 通过","1. 不引入额外依赖
+2. 不改动非测试代码路径",已完成,已完成
 P2-4,MCP: 限制工具返回的 stdout/stderr 大小（避免超大响应）,"**背景：** 多个工具直接拼接返回 `stdout/stderr`。当底层输出很大时，会导致 MCP 响应体巨大、宿主 UI 卡顿或传输失败。
 
 **修复内容：**
