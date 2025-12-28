@@ -116,14 +116,14 @@ def test_signal_opt_workflow(tmp_path: Path) -> None:
     assert "error" not in res_routes.lower() and "failed" not in res_routes.lower()
     
     # Now run the workflow via server script (integration test)
-    server_path = base_dir.parents[1] / "src" / "server.py"
+    server_path = base_dir.parent / "src" / "server.py"
     python_exe = sys.executable # Use current python
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     
     process = subprocess.Popen(
-        [python_exe, server_path],
+        [python_exe, str(server_path)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=sys.stderr,

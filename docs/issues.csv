@@ -508,6 +508,15 @@ P0-13,Timeout: tlsCycleAdaptation/tlsCoordinator 在 Windows 上易误超时（�
 **影响范围：** 减少 Windows 下的误超时失败，提升 signal_opt 工作流成功率","1. 单测覆盖 timeout 自适应逻辑与 params 透传
 2. `pytest -q` 通过","1. 不引入额外依赖
 2. 不改变工具返回类型/格式",已完成,已完成
+P0-14,Tests: signal_opt 启动 server.py 的路径计算在 Windows 上错误,"**背景：** `tests/test_signal_opt.py` 通过 `subprocess.Popen([sys.executable, server.py])` 启动 MCP server 做端到端测试。此前在重构为 `tmp_path` 后，server 路径使用 `base_dir.parents[1] / 'src/server.py'`（base_dir=tests 目录），导致 Windows 上解析为 `.../projects/src/server.py`（缺失仓库目录），进而报错 `python: can't open file ...`，并表现为 `server stdout closed unexpectedly`。
+
+**修复内容：**
+1. 统一与其他测试一致的 repo root 推导：`base_dir.parent / 'src/server.py'`（base_dir=tests 目录）。
+2. `Popen` 参数显式转为 `str(server_path)`，避免 path-like 在不同 Python 版本/平台行为差异。
+
+**影响范围：** Windows 上 signal_opt 集成测试可运行","1. Windows 下运行 `pytest tests/test_signal_opt.py -v -s` 不再出现 `can't open file ...src/server.py`
+2. `pytest -q` 通过","1. 不引入额外依赖
+2. 不修改非测试代码路径",已完成,已完成
 P1-7,RL: 补齐 manage_rl_task(train_custom) 验收单测,"**背景：** `P1-3` 已实现参数同义字段与 scenario 解析，但缺少验收级单测，存在“实现漂移/回归不自知”的风险。
 
 **修复内容：**
