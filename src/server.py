@@ -123,25 +123,42 @@ def control_simulation(action: str, params: Optional[Dict[str, Any]] = None) -> 
     params = params or {}
     
     try:
+        timeout_s_raw = params.get("timeout_s", params.get("timeout"))
+        timeout_s: Optional[float] = None
+        if timeout_s_raw is not None:
+            try:
+                timeout_s = float(timeout_s_raw)
+            except (TypeError, ValueError):
+                return f"Error: timeout_s must be a number, got {timeout_s_raw!r}"
+
         if action == "connect":
             config_file = params.get("config_file")
             gui = params.get("gui", False)
             port = params.get("port", 8813)
             host = params.get("host", "localhost")
-            connection_manager.connect(config_file, gui, port, host)
+            if timeout_s is None:
+                connection_manager.connect(config_file, gui, port, host)
+            else:
+                connection_manager.connect(config_file, gui, port, host, timeout_s=timeout_s)
             return "Successfully connected to SUMO."
             
         elif action == "step":
             step = params.get("step", 0)
-            connection_manager.simulation_step(step)
+            if timeout_s is None:
+                connection_manager.simulation_step(step)
+            else:
+                connection_manager.simulation_step(step, timeout_s=timeout_s)
             return "Simulation advanced."
             
         elif action == "disconnect":
-            connection_manager.disconnect()
+            if timeout_s is None:
+                connection_manager.disconnect()
+            else:
+                connection_manager.disconnect(timeout_s=timeout_s)
             return "Successfully disconnected from SUMO."
             
     except Exception as e:
-        return f"Error in control_simulation ({action}): {e}"
+        return f"Error in control_simulation ({action}): {type(e).__name__}: {e}"
         
     return f"Unknown action: {action}"
 
@@ -178,7 +195,7 @@ def query_simulation_state(target: str, params: Optional[Dict[str, Any]] = None)
             return f"Simulation Info: {info}"
             
     except Exception as e:
-        return f"Error querying state: {e}"
+        return f"Error querying state: {type(e).__name__}: {e}"
         
     return f"Unknown target: {target}"
 
