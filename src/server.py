@@ -286,37 +286,71 @@ def optimize_traffic_signals(method: str, net_file: str, route_file: str, output
     return f"Unknown method: {method}"
 
 # --- 6. Workflows ---
-@server.tool(description="Run high-level workflows.")
+@server.tool(
+    description="""Run high-level SUMO workflows. Available workflows:
+
+**sim_gen_eval** - Generate grid network, simulate traffic, analyze results.
+  params:
+  - grid_number (int): Grid size NxN. Default=3. Aliases: grid_size, size
+  - sim_seconds (int): Simulation duration in seconds. Default=100. Aliases: steps, duration, end_time
+  - output_dir (str): Output directory. Default="output"
+  Example: run_workflow("sim_gen_eval", {"grid_number": 3, "sim_seconds": 1000})
+
+**signal_opt** - Optimize traffic signals for existing network.
+  params:
+  - net_file (str): Path to .net.xml file. REQUIRED
+  - route_file (str): Path to .rou.xml file. REQUIRED
+  - sim_seconds (int): Simulation duration. Default=3600. Aliases: steps, duration
+  - use_coordinator (bool): Use tlsCoordinator instead of tlsCycleAdaptation. Default=false
+  - output_dir (str): Output directory. Default="output"
+
+**rl_train** - Train RL agent for traffic signal control.
+  params:
+  - scenario_name (str): Built-in scenario name (use manage_rl_task("list_scenarios") to see options). Aliases: scenario
+  - episodes (int): Number of training episodes. Default=5. Aliases: num_episodes
+  - steps (int): Steps per episode. Default=1000. Aliases: steps_per_episode
+  - output_dir (str): Output directory. Default="output"
+"""
+)
 def run_workflow(workflow_name: str, params: Dict[str, Any]) -> str:
-    """
-    workflows:
-    - sim_gen_eval: params={'output_dir', 'grid_number', 'steps'}
-    - signal_opt: params={'net_file', 'route_file', 'output_dir', 'steps', 'use_coordinator'}
-    - rl_train: params={'scenario_name', 'output_dir', 'episodes', 'steps'}
-    """
-    if workflow_name == "sim_gen_eval" or workflow_name == "sim_gen_workflow" or workflow_name == "sim_gen":
-        return sim_gen_workflow(
-            params.get("output_dir", "output"), 
-            params.get("grid_number", 3), 
-            params.get("steps", 100)
-        )
-    elif workflow_name == "signal_opt" or workflow_name == "signal_opt_workflow":
-        return signal_opt_workflow(
-            params.get("net_file", ""),
-            params.get("route_file", ""),
-            params.get("output_dir", "output"),
-            params.get("steps", 3600),
-            params.get("use_coordinator", False)
-        )
+    """Execute a high-level workflow."""
+
+    # Helper to get param with aliases
+    def get_param(keys: list, default=None):
+        for k in keys:
+            if k in params:
+                return params[k]
+        return default
+
+    if workflow_name in ("sim_gen_eval", "sim_gen_workflow", "sim_gen"):
+        grid_number = get_param(["grid_number", "grid_size", "size"], 3)
+        sim_seconds = get_param(["sim_seconds", "steps", "duration", "end_time"], 100)
+        output_dir = get_param(["output_dir"], "output")
+
+        return sim_gen_workflow(output_dir, int(grid_number), int(sim_seconds))
+
+    elif workflow_name in ("signal_opt", "signal_opt_workflow"):
+        net_file = get_param(["net_file"], "")
+        route_file = get_param(["route_file"], "")
+
+        if not net_file or not route_file:
+            return "Error: signal_opt requires net_file and route_file parameters."
+
+        sim_seconds = get_param(["sim_seconds", "steps", "duration"], 3600)
+        use_coordinator = get_param(["use_coordinator"], False)
+        output_dir = get_param(["output_dir"], "output")
+
+        return signal_opt_workflow(net_file, route_file, output_dir, int(sim_seconds), bool(use_coordinator))
+
     elif workflow_name == "rl_train":
-        return rl_train_workflow(
-            params.get("scenario_name", ""),
-            params.get("output_dir", "output"),
-            params.get("episodes", 5),
-            params.get("steps", 1000)
-        )
-        
-    return f"Unknown workflow: {workflow_name}"
+        scenario_name = get_param(["scenario_name", "scenario"], "")
+        episodes = get_param(["episodes", "num_episodes"], 5)
+        steps = get_param(["steps", "steps_per_episode"], 1000)
+        output_dir = get_param(["output_dir"], "output")
+
+        return rl_train_workflow(scenario_name, output_dir, int(episodes), int(steps))
+
+    return f"Unknown workflow: {workflow_name}. Available: sim_gen_eval, signal_opt, rl_train"
 
 # --- 7. RL Task Management ---
 @server.tool(description="Manage RL tasks (list scenarios, custom training).")

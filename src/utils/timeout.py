@@ -330,6 +330,8 @@ def subprocess_run_with_timeout(
     # 确保 capture_output 以避免 stdout 污染
     kwargs.setdefault("capture_output", True)
     kwargs.setdefault("text", True)
+    # Avoid child processes accidentally reading MCP JSON-RPC from stdin.
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
 
     # Ensure tool subprocesses don't inherit "server stdio" behaviors that are only
     # needed for the MCP transport (e.g., PYTHONUNBUFFERED for JSON-RPC flushing).
